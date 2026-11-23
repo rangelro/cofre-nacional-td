@@ -1,26 +1,44 @@
+--!strict
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Debris = game:GetService("Debris")
-local WaveSpawner = require(script.WaveSpawner)
+local ServerScriptService = game:GetService("ServerScriptService")
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local EnemyService = require(script.EnemyService)
+local WaveService = require(script.WaveService)
+local DataService = require(script.DataService)
+local Economy = require(script.Economy)
+require(script.TowerService)
+require(script.MonetizationService)
+
+local function onPlayer(player: Player)
+	if DataService.load(player) then
+		Economy.init(player)
+	end
+end
+Players.PlayerAdded:Connect(onPlayer)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayer, player)
+end
 
 if RunService:IsStudio() then
-	WaveSpawner.selfCheck()
+	WaveService.selfCheck()
+	-- Teste sem torres, pela Command Bar: game.ServerScriptService.DebugDamageAll:Fire(30)
+	local debugDamage = Instance.new("BindableEvent")
+	debugDamage.Name = "DebugDamageAll"
+	debugDamage.Parent = ServerScriptService
+	debugDamage.Event:Connect(function(amount: number)
+		for _, e in table.clone(EnemyService.all()) do
+			EnemyService.damage(e, amount, true)
+		end
+	end)
 end
 
--- ponytail: placeholder até existir o movimento por waypoints; troque por EnemyMover.spawn(stats)
-local function spawnEnemy(stats)
-	local part = Instance.new("Part")
-	part.Name = stats.Name
-	part.Anchored = true
-	part.Size = Vector3.new(2, 4, 2)
-	part.Position = Vector3.new(0, 2, 0)
-	for k, v in stats do
-		part:SetAttribute(k, v)
+-- Qualquer jogador pode iniciar; só a primeira chamada conta
+Remotes.StartWaves.OnServerEvent:Connect(function()
+	if ReplicatedStorage:GetAttribute("WavesStarted") then
+		return
 	end
-	part.Parent = workspace
-	Debris:AddItem(part, 5)
-	return part
-end
-
-task.spawn(WaveSpawner.run, spawnEnemy, function(n, mutator)
-	print(("Onda %d%s"):format(n, mutator and (" - " .. mutator.Name) or ""))
+	ReplicatedStorage:SetAttribute("WavesStarted", true)
+	task.spawn(WaveService.run)
 end)
